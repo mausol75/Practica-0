@@ -1,0 +1,83 @@
+name: Validate and deploy production
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: practica00-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: Practica00/sistema/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        working-directory: Practica00/sistema/backend
+        env:
+          SESSION_SECRET: ci-test-secret-not-for-production
+        run: python -m pytest tests/ -v
+
+      - name: Validate Compose config
+        working-directory: Practica00
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p .secrets
+          printf 'ci-placeholder\n' > .secrets/session_secret
+          docker compose -f compose.yaml -f compose.runner.yaml config --quiet
+          echo "Compose config is valid"
+
+  deploy:
+    name: Deploy
+    needs: validate
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'mausol75/Practica-0'
+    environment: production
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - practica00-prod
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Deploy exact commit
+        shell: bash
+        run: |
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          sudo /usr/local/sbin/deploy-practica00 "$GITHUB_SHA"

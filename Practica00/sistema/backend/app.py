@@ -37,8 +37,20 @@ from db import find_user_by_username, init_db, seed_user
 
 load_dotenv()
 
+
+def _load_secret(env_var: str, file_env_var: str, default: str) -> str:
+    """Lee un secreto desde archivo (Docker secrets) o variable de entorno."""
+    file_path = os.getenv(file_env_var, "")
+    if file_path and os.path.isfile(file_path):
+        with open(file_path, "r") as f:
+            return f.read().strip()
+    return os.getenv(env_var, default)
+
+
 app = Flask(__name__, static_folder=None)
-app.secret_key = os.getenv("SESSION_SECRET", "dev-secret-key-cambiar-en-prod")
+app.secret_key = _load_secret(
+    "SESSION_SECRET", "SESSION_SECRET_FILE", "dev-secret-key-cambiar-en-prod"
+)
 
 # Cookies de sesión seguras (api-spec.md: HttpOnly, SameSite=Lax)
 app.config.update(

@@ -1,0 +1,14 @@
+# ============================================================
+# compose.runner.yaml -- Override para despliegue en EC2
+# ============================================================
+# Etiqueta la imagen con el SHA del commit desplegado.
+# Permite rollback local a una version anterior.
+#
+# Uso (desde el script deploy-practica00):
+#   RELEASE_SHA=<sha> docker compose \
+#     -f compose.yaml -f compose.runner.yaml up -d
+# ============================================================
+
+services:
+  app:
+    image: practica00-app:${RELEASE_SHA:?RELEASE_SHA_required}
