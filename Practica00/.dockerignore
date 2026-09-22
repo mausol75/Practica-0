@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+agents/
+specs/
+*.md
+sistema/backend/.env
+sistema/backend/login.db
