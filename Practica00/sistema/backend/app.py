@@ -320,6 +320,17 @@ def api_weather():
 
 
 # ---------------------------------------------------------------------------
+# Endpoints — Health Check (Elastic Beanstalk)
+# ---------------------------------------------------------------------------
+
+
+@app.route("/health", methods=["GET"])
+def health_check():
+    """GET /health — Health check para el Load Balancer de Elastic Beanstalk."""
+    return jsonify({"status": "healthy"}), 200
+
+
+# ---------------------------------------------------------------------------
 # Endpoints — Páginas
 # ---------------------------------------------------------------------------
 

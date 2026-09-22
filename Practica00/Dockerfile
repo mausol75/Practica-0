@@ -11,8 +11,12 @@ COPY sistema/ ./sistema/
 
 WORKDIR /app/sistema/backend
 
-# Puerto de la app
-EXPOSE 5000
+# Health check para Elastic Beanstalk
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
 
-# Arrancar la app
-CMD ["python", "app.py"]
+# Puerto que Elastic Beanstalk espera
+EXPOSE 8080
+
+# Arrancar con gunicorn (servidor WSGI de producción)
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "120", "app:app"]

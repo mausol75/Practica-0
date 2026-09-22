@@ -1,0 +1,95 @@
+name: Deploy to AWS Elastic Beanstalk
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  EB_APP_NAME: practica00-login
+  EB_ENV_NAME: practica00-env
+  S3_BUCKET: elasticbeanstalk-us-east-1-practica00
+
+jobs:
+  deploy:
+    name: Deploy to Elastic Beanstalk
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout del código
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      # 2. Configurar credenciales AWS
+      - name: Configurar AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3. Generar version label
+      - name: Generar version label
+        id: version
+        run: echo "label=practica00-$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      # 4. Empaquetar aplicación como ZIP
+      - name: Empaquetar aplicación
+        run: |
+          zip -r deploy-package.zip . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "agents/*" \
+            -x "specs/*" \
+            -x "deploy/*" \
+            -x "*.md" \
+            -x "__pycache__/*" \
+            -x ".pytest_cache/*" \
+            -x ".venv/*" \
+            -x "sistema/backend/.env" \
+            -x "sistema/backend/login.db" \
+            -x "*.pyc"
+
+      # 5. Subir ZIP a S3
+      - name: Subir paquete a S3
+        run: |
+          aws s3 cp deploy-package.zip \
+            s3://${{ env.S3_BUCKET }}/${{ steps.version.outputs.label }}.zip
+
+      # 6. Crear nueva versión en Elastic Beanstalk
+      - name: Crear versión en EB
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name "${{ env.EB_APP_NAME }}" \
+            --version-label "${{ steps.version.outputs.label }}" \
+            --source-bundle S3Bucket="${{ env.S3_BUCKET }}",S3Key="${{ steps.version.outputs.label }}.zip" \
+            --description "Deploy automático desde GitHub commit ${GITHUB_SHA::7}"
+
+      # 7. Desplegar al entorno
+      - name: Desplegar al entorno EB
+        run: |
+          aws elasticbeanstalk update-environment \
+            --application-name "${{ env.EB_APP_NAME }}" \
+            --environment-name "${{ env.EB_ENV_NAME }}" \
+            --version-label "${{ steps.version.outputs.label }}"
+
+      # 8. Esperar a que el entorno esté listo
+      - name: Esperar despliegue
+        run: |
+          echo "⏳ Esperando a que el entorno esté Ready..."
+          aws elasticbeanstalk wait environment-updated \
+            --application-name "${{ env.EB_APP_NAME }}" \
+            --environment-names "${{ env.EB_ENV_NAME }}"
+          echo "✅ Despliegue completado exitosamente!"
+
+      # 9. Mostrar URL de la aplicación
+      - name: Mostrar URL
+        run: |
+          URL=$(aws elasticbeanstalk describe-environments \
+            --application-name "${{ env.EB_APP_NAME }}" \
+            --environment-names "${{ env.EB_ENV_NAME }}" \
+            --query "Environments[0].CNAME" \
+            --output text)
+          echo "🚀 Aplicación desplegada en: http://$URL"
+          echo "### 🚀 App desplegada exitosamente!" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** http://$URL" >> $GITHUB_STEP_SUMMARY
